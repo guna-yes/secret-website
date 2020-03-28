@@ -62,7 +62,8 @@ User.findOne({email:username},function(err,found){
     }
   }
 })
-});
+}
+);
 
 
 app.listen(3000, function() {
