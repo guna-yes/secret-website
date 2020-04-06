@@ -9,6 +9,7 @@ const passport = require('passport');
 const findOrCreate=require("mongoose-findOrCreate")
 const passportLocalMongoose=require("passport-local-mongoose")
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const FacebookStrategy=require("passport-facebook").Strategy;
 
 // const bcrypt = require('bcrypt');
 // const saltRounds=10;
@@ -32,7 +33,7 @@ app.use(passport.initialize());
 //session allows to getback the previous stored page when closed
 //when we restart
 app.use(passport.session());
-mongoose.connect("mongodb://localhost:27017/userdb", { //to connect to mongodb database
+mongoose.connect("mongodb://localhost:27017/userDB", { //to connect to mongodb database
   useNewUrlParser: true
 });
 mongoose.set("useCreateIndex",true);
@@ -40,7 +41,8 @@ const userschema = new mongoose.Schema({
   email: String,
   password: String,
   googleId: String,
-  secret:String
+  secret:Array,
+  facebookId:String
 }
 );
 userschema.plugin(findOrCreate);
@@ -77,6 +79,27 @@ passport.use(new GoogleStrategy({
     });
   }
 ));
+passport.use(new FacebookStrategy({
+    clientID: process.env.FACEBOOK_APP_ID,
+    clientSecret: process.env.FACEBOOK_APP_SECRET,
+    callbackURL: "http://localhost:2000/auth/facebook/secrets"
+  },
+  function(accessToken, refreshToken, profile, cb) {
+    console.log(profile);
+    User.findOrCreate({ facebookId: profile.id }, function (err, user) {
+      return cb(err, user);
+    });
+  }
+));
+app.get('/auth/facebook',
+  passport.authenticate('facebook', { scope: ['public_profile','email'] }));
+
+app.get('/auth/facebook/secrets',
+  passport.authenticate('facebook', { failureRedirect: '/login' }),
+  function(req, res) {
+    // Successful authentication, redirect home.
+    res.redirect('/secrets');
+  });
 
 app.get("/", function(req, res) {
   res.render("home");
@@ -87,7 +110,7 @@ app.get("/login", function(req, res) {
 
 })
 app.get("/auth/google",// no callback here
-passport.authenticate('google', { scope: ["profile"] })
+passport.authenticate('google', { scope: ['profile'] })
 );
 app.get("/auth/google/secrets",
   passport.authenticate('google', { failureRedirect: '/login' }),
@@ -125,17 +148,18 @@ app.get("/submit",function(req,res){
 });
 app.post("/submit",function(req,res){
   const submitsecret=req.body.secret;
-  console.log(req.user);
-  User.findById(req.user.id,function(err,found){
+  var userid=req.user.id;
+  User.findOneAndUpdate({_id:userid},{$push:{secret:submitsecret}},function(err,found){
     if(err){
       console.log(err);
     }else{
       if(found){
-        found.secret=submitsecret;
-        found.save(function(){
-          res.redirect("/secrets")
-        })
-      }
+      
+        //  found.save(function(){
+         console.log( found);
+           res.redirect("/secrets")
+        //  });
+       }
     }
   })
 })
